@@ -1,0 +1,9 @@
+app:
+    name: cpanel
+
+models:
+    -user:
+        id(int, pk)
+        name(string)
+        gender(int, default: 0)
+        comments(longtext, null)
