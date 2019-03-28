@@ -2,8 +2,14 @@ app:
     name: cpanel
 
 models:
-    -user:
+    -employee:
+        id(int, pk)
+        name(string, max:30)
+        gender(int, default:0)
+        comments(longtext, null)
+        +department(o2m, on_delete:cascade)
+
+    -department:
         id(int, pk)
         name(string)
-        gender(int, default: 0)
-        comments(longtext, null)
+        total_income(float)

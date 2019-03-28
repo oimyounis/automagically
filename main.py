@@ -20,7 +20,7 @@ class App:
         return model
 
     def __str__(self):
-        return 'App: %s\n %s' % (self.name, '')
+        return 'App: %s' % self.name
 
 
 class Model:
@@ -28,22 +28,67 @@ class Model:
         self.name = name
         self.fields = {}
 
-    def add_field(self, name, attrs):
-        field = ModelField(name, attrs)
+    def add_field(self, name, attrs, fk=False):
+        field = ModelField(name, attrs, fk)
         self.fields[name] = field
         return field
 
 
+class Relation:
+    O2O = 1
+    O2M = 2
+    M2M = 3
+
+    def __init__(self, model, type=O2M):
+        self.model = model
+        self.on_delete = None
+        self.on_update = None
+        self.type = type
+
+
 class ModelField:
-    def __init__(self, name, attrs):
+    def __init__(self, name, attrs, fk=False):
         self.name = name
+        self.pk = False
+        self.fk = fk
+        self.relation = None
+        self.null = False
+
+        if self.fk:
+            self.relation = Relation(name)
 
         for attr in attrs:
-            if attr == 'pk':
+            if attr == 'pk' and not self.fk:
                 self.pk = True
-            elif attr in ('int', 'string', 'bool', 'float', 'longtext'):
+            elif attr in ('int', 'string', 'bool', 'float', 'longtext') and not self.fk:
                 self.type = attr
-                # TODO: continue parsing attrs...
+                if attr == 'string':
+                    self.max_length = 255
+            elif attr == 'null':
+                self.null = True
+            elif attr in (Relation.O2O, Relation.O2M, Relation.M2M):
+                self.relation.type = attr
+            elif ':' in attr:
+                parts = attr.split(':')
+                attribute = parts[0].strip()
+                val = parts[1].strip()
+
+                if attribute == 'default':
+                    self.default = val
+                elif attribute == 'max':
+                    if self.type == 'int':
+                        self.max_length = int(val)
+                    elif self.type == 'float':
+                        self.max_length = float(val)
+                    elif self.type == 'string':
+                        self.max_length = val
+                elif self.fk and attribute == 'on_delete':
+                    self.relation.on_delete = val
+                elif self.fk and attribute == 'on_update':
+                    self.relation.on_update = val
+
+            else:
+                raise Exception("Unknown attribute passed: %s" % attr)
 
 
 def get_directive(string):
@@ -59,7 +104,7 @@ def get_subdefinition(string):
 
 
 def get_model_field(string):
-    return re.match(r'^([a-zA-Z0-9_]+)\s?\(\s?(.+)\)$', string)
+    return re.match(r'^(\+)?\s?([a-zA-Z0-9_]+)\s?\(\s?(.+)\)$', string)
 
 
 active_directive = None
@@ -110,9 +155,14 @@ def handle_model_field(model_field):
     global parsing_model
 
     if parsing_model:
-        fieldname = model_field.group(1)
-        attrs = tuple(map(lambda a: sanitize(a), model_field.group(2).split(',')))
-        parsing_model.add_field(fieldname, attrs)
+        fk = False
+
+        if model_field.group(1) == '+':
+            fk = True
+
+        fieldname = model_field.group(2)
+        attrs = tuple(map(lambda a: sanitize(a), model_field.group(3).split(',')))
+        parsing_model.add_field(fieldname, attrs, fk)
 
 
 def parse_line(line):
