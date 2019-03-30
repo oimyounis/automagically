@@ -35,9 +35,12 @@ class Model:
 
 
 class Relation:
-    O2O = 1
-    O2M = 2
-    M2M = 3
+    O2O = 'o2o'
+    O2M = 'o2m'
+    M2M = 'm2m'
+    CASCADE = 'cascade'
+    SET_NULL = 'set_null'
+    DO_NOTHING = 'do_nothing'
 
     def __init__(self, model, type=O2M):
         self.model = model
@@ -49,6 +52,7 @@ class Relation:
 class ModelField:
     def __init__(self, name, attrs, fk=False):
         self.name = name
+        self.type = None
         self.pk = False
         self.fk = fk
         self.relation = None
@@ -57,6 +61,9 @@ class ModelField:
         if self.fk:
             self.relation = Relation(name)
 
+        self.parse_attributes(attrs)
+
+    def parse_attributes(self, attrs):
         for attr in attrs:
             if attr == 'pk' and not self.fk:
                 self.pk = True
@@ -83,8 +90,12 @@ class ModelField:
                     elif self.type == 'string':
                         self.max_length = val
                 elif self.fk and attribute == 'on_delete':
+                    if val not in (Relation.CASCADE, Relation.DO_NOTHING, Relation.SET_NULL):
+                        raise Exception("Unknown value provided to %s option: %s" % (attribute, val))
                     self.relation.on_delete = val
                 elif self.fk and attribute == 'on_update':
+                    if val not in (Relation.CASCADE, Relation.DO_NOTHING, Relation.SET_NULL):
+                        raise Exception("Unknown value provided to %s option: %s" % (attribute, val))
                     self.relation.on_update = val
 
             else:
@@ -147,7 +158,7 @@ def handle_subdefinition(subdefinition):
         if flag == '-':
             parsing_model = app.add_model(name)
         elif flag == '+':
-            pass  # TODO: implement foreign key relation
+            pass  # TODO: implement defining foreign key relation
 
 
 def handle_model_field(model_field):
