@@ -4,6 +4,8 @@ from core.constants import *
 
 indexlines = sanitize_list(readfile(INDEX_F))
 
+indentation = SPACES_4
+
 app = None
 active_directive = None
 parsing_model = None
@@ -13,16 +15,17 @@ class App:
     def __init__(self, name):
         self.name = name
         self.models = {}
+        self.capitalize_models = True
 
     def add_model(self, name):
         model = Model(name)
-        self.models[name] = model
+        self.models[model.name] = model
         return model
 
     def reverse_models(self):
         lines = []
         if self.models:
-            lines.append('from django.db import models\n\n')
+            lines.append('%s\n\n' % IMPORT_DJANGO_MODELS)
             for name, model in app.models.items():
                 lines.append(str(model))
 
@@ -34,7 +37,16 @@ class App:
 
 class Model:
     def __init__(self, name):
-        self.name = name
+        global app
+
+        _name = name
+        if app.capitalize_models:
+            _name = ''
+            words = name.split('_')
+            for word in words:
+                _name += word.capitalize()
+
+        self.name = _name
         self.fields = {}
 
     def add_field(self, name, attrs, fk=False):
@@ -43,9 +55,9 @@ class Model:
         return field
 
     def __str__(self):
-        output = ['class %s(models.Model):' % self.name]
+        output = [MODEL_DEFINITION % self.name]
         for name, field in self.fields.items():
-            output.append('    %s' % str(field))
+            output.append('%s%s' % (indentation, str(field)))
 
         output += ['', '']
 
@@ -64,10 +76,24 @@ class Relation:
     ACTIONS = (CASCADE, SET_NULL, DO_NOTHING, SET_DEFAULT)
 
     def __init__(self, model, type=O2M):
-        self.model = model
+        self.model = ''
         self.on_delete = None
         self.on_update = None
         self.type = type
+
+        self.set_model(model)
+
+    def set_model(self, model):
+        global app
+
+        _model = model
+        if app.capitalize_models:
+            _model = ''
+            words = model.split('_')
+            for word in words:
+                _model += word.capitalize()
+
+        self.model = _model
 
     def get_on_delete_text(self):
         if not self.on_delete:
@@ -133,6 +159,8 @@ class ModelField:
                     if val not in Relation.ACTIONS:
                         raise Exception("Unknown value provided to the %s option: %s" % (attribute, val))
                     self.relation.on_update = val
+                elif attribute == 'model':
+                    self.relation.set_model(val)
 
             else:
                 raise Exception("Unknown attribute passed: %s" % attr)
@@ -235,6 +263,12 @@ def handle_definition(definition):
     if active_directive == 'app':
         if defname == 'name':
             app = App(value)
+        elif defname == 'capitalize_models':
+            if app:
+                if value == 'true':
+                    app.capitalize_models = True
+                elif value == 'false':
+                    app.capitalize_models = False
 
 
 def handle_subdefinition(subdefinition):
@@ -291,7 +325,7 @@ def parse_line(line):
 parse(indexlines)
 models = app.reverse_models()
 
-OUTPUT_PATH = os.path.join(os.path.dirname(__file__), 'output')
+OUTPUT_PATH = os.path.join(os.path.dirname(__file__), OUTPUT_FOLDER)
 
 if not os.path.exists(OUTPUT_PATH):
     os.makedirs(OUTPUT_PATH)
