@@ -11,5 +11,5 @@ models:
 
     -department:
         id(int, pk)
-        name(string)
+        name(string, null, default:'dept')
         total_income(float)
