@@ -16,6 +16,7 @@ class App:
         self.name = name
         self.models = {}
         self.capitalize_models = True
+        self.auto_generate_serializers = True
 
     def add_model(self, name):
         model = Model(name)
@@ -25,9 +26,18 @@ class App:
     def reverse_models(self):
         lines = []
         if self.models:
-            lines.append('%s\n\n' % IMPORT_DJANGO_MODELS)
+            lines.append('%s\n\n' % DJANGO_IMPORT_MODELS)
             for name, model in app.models.items():
                 lines.append(str(model))
+
+        return '\n'.join(lines)
+
+    def generate_serializers(self):
+        lines = []
+        if self.models:
+            lines.append('%s\n\n' % DJANGO_IMPORT_SERIALIZERS)
+            for name, model in app.models.items():
+                lines.append(model.generate_serializer())
 
         return '\n'.join(lines)
 
@@ -54,8 +64,20 @@ class Model:
         self.fields[name] = field
         return field
 
+    def generate_serializer(self):
+        lines = [
+            DJANGO_DEFINITION_SERIALIZER % self.name,
+            '%s%s' % (indentation, DJANGO_DEFINITION_META_CLASS),
+            '%s%s' % (indentation * 2, DJANGO_SET_SERIALIZERS_MODEL % self.name),
+            "%sfields = '__all__'" % (indentation * 2),
+            '',
+            '',
+        ]
+
+        return '\n'.join(lines)
+
     def __str__(self):
-        output = [MODEL_DEFINITION % self.name]
+        output = [DJANGO_DEFINITION_MODEL % self.name]
         for name, field in self.fields.items():
             output.append('%s%s' % (indentation, str(field)))
 
@@ -269,6 +291,12 @@ def handle_definition(definition):
                     app.capitalize_models = True
                 elif value == 'false':
                     app.capitalize_models = False
+        elif defname == 'auto_generate_serializers':
+            if app:
+                if value == 'true':
+                    app.auto_generate_serializers = True
+                elif value == 'false':
+                    app.auto_generate_serializers = False
 
 
 def handle_subdefinition(subdefinition):
@@ -322,15 +350,18 @@ def parse_line(line):
                     handle_model_field(model_field)
 
 
+def build(app):
+    models = app.reverse_models()
+
+    writefile(BUILD_MODELS_NAME, models)
+
+    if app.auto_generate_serializers:
+        serializers = app.generate_serializers()
+        if serializers:
+            writefile(BUILD_SERIALIZERS_NAME, serializers)
+
+
 parse(indexlines)
-models = app.reverse_models()
-
-OUTPUT_PATH = os.path.join(os.path.dirname(__file__), OUTPUT_FOLDER)
-
-if not os.path.exists(OUTPUT_PATH):
-    os.makedirs(OUTPUT_PATH)
-
-with open(os.path.join(OUTPUT_PATH, MODELS_OUTPUT), 'w+t') as handle:
-    handle.write(models)
+build(app)
 
 print()

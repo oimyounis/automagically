@@ -22,6 +22,16 @@ def readfile(filename):
         return handle.readlines()
 
 
+def writefile(filename, content):
+    OUTPUT_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), OUTPUT_FOLDER)
+
+    if not os.path.exists(OUTPUT_PATH):
+        os.makedirs(OUTPUT_PATH)
+
+    with open(os.path.join(OUTPUT_PATH, filename), 'w+t') as handle:
+        handle.write(content)
+
+
 def sanitize_list(dirty):
     clean = []
     for item in dirty:
