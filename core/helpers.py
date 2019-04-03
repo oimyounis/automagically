@@ -22,8 +22,8 @@ def readfile(filename):
         return handle.readlines()
 
 
-def writefile(filename, content):
-    OUTPUT_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), OUTPUT_FOLDER)
+def writefile(filename, content, directory=''):
+    OUTPUT_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), OUTPUT_FOLDER, directory)
 
     if not os.path.exists(OUTPUT_PATH):
         os.makedirs(OUTPUT_PATH)
@@ -39,3 +39,21 @@ def sanitize_list(dirty):
         if sanitized:
             clean.append(sanitized)
     return clean
+
+
+def capitalize_word(target):
+    _word = ''
+    words = target.split('_')
+    for word in words:
+        _word += word.capitalize()
+
+    return _word
+
+
+def kabab_word(target):
+    target = target.replace('_', '-')
+    matches = re.findall(r'([A-Z])', target)
+    for match in matches:
+        target = target.replace(match, '-%s' % match.lower())
+
+    return target.lower().strip('-')

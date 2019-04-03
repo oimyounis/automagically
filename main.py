@@ -17,6 +17,8 @@ class App:
         self.models = {}
         self.capitalize_models = True
         self.auto_generate_serializers = True
+        self.auto_generate_apiviews = True
+        self.auto_generate_apiurls = True
 
     def add_model(self, name):
         model = Model(name)
@@ -41,6 +43,27 @@ class App:
 
         return '\n'.join(lines)
 
+    def generate_apiviews(self):
+        lines = []
+        if self.models:
+            lines.append('%s\n\n' % DJANGO_IMPORT_APIVIEWS)
+            for name, model in app.models.items():
+                lines.append(model.generate_apiview())
+
+        return '\n'.join(lines)
+
+    def generate_apiurls(self):
+        lines = []
+        if self.models:
+            lines.append('%s\n\n' % DJANGO_IMPORT_APIURLS)
+            lines.append('urlpatterns = [')
+            for name, model in app.models.items():
+                lines.append(model.generate_apiurls())
+
+        lines.append(']')
+
+        return '\n'.join(lines)
+
     def __str__(self):
         return 'App: %s' % self.name
 
@@ -49,12 +72,10 @@ class Model:
     def __init__(self, name):
         global app
 
+        name = name.replace('-', '_')
         _name = name
         if app.capitalize_models:
-            _name = ''
-            words = name.split('_')
-            for word in words:
-                _name += word.capitalize()
+            _name = capitalize_word(name)
 
         self.name = _name
         self.fields = {}
@@ -64,14 +85,54 @@ class Model:
         self.fields[name] = field
         return field
 
+    def get_serializer_name(self):
+        return '%sSerializer' % self.name
+
     def generate_serializer(self):
         lines = [
-            DJANGO_DEFINITION_SERIALIZER % self.name,
+            DJANGO_DEFINITION_SERIALIZER % self.get_serializer_name(),
             '%s%s' % (indentation, DJANGO_DEFINITION_META_CLASS),
             '%s%s' % (indentation * 2, DJANGO_SET_SERIALIZERS_MODEL % self.name),
             "%sfields = '__all__'" % (indentation * 2),
-            '',
-            '',
+            '\n',
+        ]
+
+        return '\n'.join(lines)
+
+    def generate_apiview_get_handler(self):
+        get_handler = DJANGO_DEFINITION_API_GET_HANDLER.format(
+            model_name_lower=self.name.lower(),
+            model_name=self.name,
+            serializer=self.get_serializer_name()
+        )
+
+        return get_handler
+
+    def generate_apiview_post_handler(self):
+        get_handler = DJANGO_DEFINITION_API_POST_HANDLER.format(
+            serializer=self.get_serializer_name()
+        )
+
+        return get_handler
+
+    def generate_apiview(self):
+        get_handler_lines = self.generate_apiview_get_handler()
+        post_handler_lines = self.generate_apiview_post_handler()
+
+        lines = [
+            '%s' % DJANGO_DEFINITION_API_CLASS % self.name,
+            '%s%s\n' % (indentation, get_handler_lines),
+            '%s%s\n' % (indentation, post_handler_lines),
+        ]
+
+        return '\n'.join(lines) + '\n'
+
+    def generate_apiurls(self):
+        lines = [
+            '%s%s' % (indentation, DJANGO_DEFINITION_APIURL_PATH.format(
+                model=self.name,
+                model_kabab=kabab_word(self.name)
+            ))
         ]
 
         return '\n'.join(lines)
@@ -81,7 +142,7 @@ class Model:
         for name, field in self.fields.items():
             output.append('%s%s' % (indentation, str(field)))
 
-        output += ['', '']
+        output.append('\n')
 
         return '\n'.join(output)
 
@@ -110,10 +171,7 @@ class Relation:
 
         _model = model
         if app.capitalize_models:
-            _model = ''
-            words = model.split('_')
-            for word in words:
-                _model += word.capitalize()
+            _model = capitalize_word(model)
 
         self.model = _model
 
@@ -287,16 +345,32 @@ def handle_definition(definition):
             app = App(value)
         elif defname == 'capitalize_models':
             if app:
+                value = value.lower()
                 if value == 'true':
                     app.capitalize_models = True
                 elif value == 'false':
                     app.capitalize_models = False
         elif defname == 'auto_generate_serializers':
             if app:
+                value = value.lower()
                 if value == 'true':
                     app.auto_generate_serializers = True
                 elif value == 'false':
                     app.auto_generate_serializers = False
+        elif defname == 'auto_generate_apiviews':
+            if app:
+                value = value.lower()
+                if value == 'true':
+                    app.auto_generate_apiviews = True
+                elif value == 'false':
+                    app.auto_generate_apiviews = False
+        elif defname == 'auto_generate_apiurls':
+            if app:
+                value = value.lower()
+                if value == 'true':
+                    app.auto_generate_apiurls = True
+                elif value == 'false':
+                    app.auto_generate_apiurls = False
 
 
 def handle_subdefinition(subdefinition):
@@ -353,15 +427,26 @@ def parse_line(line):
 def build(app):
     models = app.reverse_models()
 
-    writefile(BUILD_MODELS_NAME, models)
+    writefile(BUILD_MODELS_NAME, models, directory=app.name)
 
     if app.auto_generate_serializers:
         serializers = app.generate_serializers()
         if serializers:
-            writefile(BUILD_SERIALIZERS_NAME, serializers)
+            writefile(BUILD_SERIALIZERS_NAME, serializers, directory=app.name)
+
+    if app.auto_generate_apiviews:
+        apiviews = app.generate_apiviews()
+        if apiviews:
+            writefile(BUILD_APIVIEWS_NAME, apiviews, directory=app.name)
+
+    if app.auto_generate_apiurls:
+        apiurls = app.generate_apiurls()
+        if apiurls:
+            writefile(BUILD_APIURLS_NAME, apiurls, directory=app.name)
 
 
 parse(indexlines)
 build(app)
+
 
 print()
